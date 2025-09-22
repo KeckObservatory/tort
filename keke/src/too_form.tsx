@@ -392,7 +392,7 @@ export const TooForm = (props: Props) => {
                                         }));
                                     }}
                                 >
-                                    {selectedTooItem?.InstrumentList.split(',').map(inst => (
+                                    {selectedTooItem?.InstrumentList.split(' ').map(inst => (
                                         <MenuItem key={inst} value={inst}>{inst}</MenuItem>
                                     ))}
                                 </Select>
