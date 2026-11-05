@@ -3,3 +3,4 @@ env
 *.sql
 *.sqlite3
 /dist
+/node_modules
