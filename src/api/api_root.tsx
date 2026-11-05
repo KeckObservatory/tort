@@ -254,10 +254,3 @@ export const get_too_can_interrupt = (params: TooCanInterruptParams) => {
     const query = new URLSearchParams({ ...params }).toString()
     return get<TooInterruptResult>(`/api/too/getTooCanInterrupt?${query}`)
 }
-
-// ---------- Planning Tool ----------
-
-export const submit_planning_tool_target = (targets: PlanningToolTarget[], obsid: number) => {
-    document.cookie = `observer=thisisfromtom=?obsid=${btoa(obsid.toString())}; domain=www3.keck.hawaii.edu; path=/;`;
-    return post<unknown>(`/api/planning_tool/submitPlanningToolTarget`, { targets }, { credentials: 'include' })
-}

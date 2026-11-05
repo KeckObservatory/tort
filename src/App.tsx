@@ -5,7 +5,6 @@ import { TopBar } from './top_bar'
 import { TooForm } from './too_form'
 import dayjs from 'dayjs'
 import { SchedulePanel } from './schedule_panel'
-import { get_target_from_url, TargetForm } from './target_form'
 import { get_userinfo, type ScheduleItem, type UserInfo } from './api/api_root'
 
 
@@ -75,11 +74,6 @@ function App() {
                 <TooForm obsid={String(userinfo.Id)} schedule={schedule} semester={semester} date={date} setDate={setDate} userinfo={userinfo} />
                 <SchedulePanel date={date} setDate={setDate} setSchedule={setSchedule} />
               </Stack>
-              {
-                get_target_from_url().name && (
-                  <TargetForm userinfo={userinfo} />
-                )
-              }
             </Stack>
         ) : (
           <Skeleton variant="rectangular" width={"100%"} height={118} />
