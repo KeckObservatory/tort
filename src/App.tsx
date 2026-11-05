@@ -4,37 +4,10 @@ import { handleTheme } from './theme'
 import { TopBar } from './top_bar'
 import { TooForm } from './too_form'
 import dayjs from 'dayjs'
-import { SchedulePanel, type ScheduleItem } from './schedule_panel'
+import { SchedulePanel } from './schedule_panel'
 import { get_target_from_url, TargetForm } from './target_form'
-import { KECK_BASE } from './config'
+import { get_userinfo, type ScheduleItem, type UserInfo } from './api/api_root'
 
-export interface UserInfo {
-  status: string;
-  Id: number;
-  Title: string;
-  FirstName: string;
-  MiddleName: string;
-  LastName: string;
-  Email: string;
-  Affiliation: string;
-  WorkArea: string;
-  Interests: string;
-  Street: string;
-  City: string;
-  State: string;
-  Country: string;
-  Zip: string;
-  Phone: string;
-  Fax: string;
-  URL: string;
-  ModDate: string;
-  Exposed: string;
-  username: string;
-  resetcode: number;
-  AllocInst: string;
-  BadEmail: string;
-  Category: string;
-}
 
 const get_semester = (date: dayjs.Dayjs) => {
   const year = date.year();
@@ -71,20 +44,12 @@ function App() {
 
   useEffect(() => {
     const handleUserinfo = async () => {
-      const resp = await fetch(`${KECK_BASE}/userinfo/`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      // Handle token verification failure
-      if (!resp.ok) {
-        console.error('userinfo fetch failed:', resp.statusText)
-        return
+      try {
+        setUserInfo(await get_userinfo())
+        console.log('Userinfo fetched successfully.')
+      } catch (error) {
+        console.error('userinfo fetch failed:', error)
       }
-      setUserInfo && setUserInfo(await resp.json())
-      console.log('Userinfo fetched successfully.')
     }
     handleUserinfo()
   }, [])
@@ -120,7 +85,6 @@ function App() {
           <Skeleton variant="rectangular" width={"100%"} height={118} />
         )
         }
-        {/* <LoginPanel setUserInfo={setUserInfo} /> */}
       </ThemeProvider >
     </div >
   )

@@ -1,23 +1,10 @@
 import Stack from "@mui/material/Stack";
-import { StyledPaper, type UserInfo } from "./App";
+import { StyledPaper } from "./App";
 import { Button, Tooltip, Typography } from "@mui/material";
-import { KECK_API_URL } from "./config";
+import { submit_planning_tool_target, type PlanningToolTarget, type UserInfo } from "./api/api_root";
 
 interface Props {
     userinfo?: UserInfo;
-}
-
-interface PlanningToolTarget {
-    target_name: string;
-    ra_deg?: number;
-    dec_deg?: number;
-    epoch?: number;
-    equinox?: number;
-    comment?: string;
-    pm_ra?: number;
-    pm_dec?: number;
-    obsid?: number;
-    _id?: string;
 }
 
 export interface TomTarget {
@@ -107,22 +94,7 @@ export const TargetForm = (props: Props) => {
             if (userinfo) {
                 const mytgt = { ...target };
                 const planningToolTarget = tom_target_to_planning_tool_target(mytgt as unknown as TomTarget, String(userinfo.Id));
-                const body = { 'targets': [planningToolTarget] };
-                document.cookie = `observer=thisisfromtom=?obsid=${btoa(userinfo.Id.toString())}; domain=www3.keck.hawaii.edu; path=/;`;
-                const response = await fetch(`${KECK_API_URL}planning_tool/submitPlanningToolTarget`, {
-                    //credentials: "same-origin",
-                    credentials: "include",
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(body),
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Error sending target to Planning Tool: ${response.statusText}`);
-                }
-                const data = await response.json();
+                const data = await submit_planning_tool_target([planningToolTarget], userinfo.Id);
                 console.log('Target sent to Planning Tool successfully:', data);
             }
         } catch (error) {

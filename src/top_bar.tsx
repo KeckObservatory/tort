@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import DoorFrontIcon from '@mui/icons-material/DoorFront';
 import IconButton from '@mui/material/IconButton';
 import { KECK_OBS_PORTAL } from './config';
-import type { UserInfo } from './App';
+import type { UserInfo } from './api/api_root';
 
 interface Props {
   userinfo: UserInfo | null;

@@ -5,7 +5,6 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { useEffect, useState } from 'react';
-import { KECK_API_LOCAL_URL, KECK_API_URL } from './config';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -13,6 +12,7 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { StyledPaper } from './App';
+import { get_instruments_too_status, get_schedule, get_schedule_image, type InstrumentStatusResponse, type SchedImg, type ScheduleItem } from './api/api_root';
 
 
 interface ScheduleTableProps {
@@ -58,9 +58,9 @@ export const ScheduleTable = ({ instrumentStatusResp, scheduleImg, date }: Sched
                     <Table sx={{ maxWidth: 1000, justifyContent: 'center' }} size='small' aria-label="simple table">
                         <TableHead>
                             <TableRow>
-                                <TableCell align="right">Too Ready?</TableCell>
-                                <TableCell align="right">Instrument?</TableCell>
-                                <TableCell>Telescope</TableCell>
+                                <TableCell align="left">Too Ready?</TableCell>
+                                <TableCell align="left">Instrument?</TableCell>
+                                <TableCell align="right">Telescope</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -120,46 +120,6 @@ export interface Props {
     setSchedule: (schedule: ScheduleItem[]) => void;
 }
 
-export interface ScheduleItem {
-    SchedId: number;
-    Date: string;
-    StartTime: string;
-    EndTime: string;
-    Instrument: string;
-    Account: string;
-    ProjCode: string;
-    Institution: string;
-    Principal: string;
-    Observers: string;
-    Location: string;
-    Obsid: string;
-    Length: number;
-    FractionOfNight: number;
-    Semester: string;
-    TelNr?: string;
-}
-
-interface InstrumentStatus {
-    Instrument: string;
-    Available?: number;
-    Date?: string;
-    Location?: string;
-    Scheduled?: number;
-    Status?: string;
-    TelNr?: number;
-    TooReady?: boolean;
-}
-
-export interface InstrumentStatusResponse {
-    [key: string]: InstrumentStatus;
-}
-
-interface SchedImg {
-    file: string;
-    TelNr?: string;
-    img: string;
-}
-
 export const SchedulePanel = (props: Props) => {
     const { date, setDate, setSchedule } = props;
     const [instrumentsStatusResp, setInstrumentsStatusResp] = useState<InstrumentStatusResponse>({});
@@ -167,85 +127,38 @@ export const SchedulePanel = (props: Props) => {
 
     useEffect(() => {
 
-        const getScheduleImage = async () => {
-            console.log('TooForm component mounted with date:', date);
-            let schedImg = [] as SchedImg[];
-            try {
-                for (let idx = 1; idx <= 2; idx++) {
-                    const telnr = idx.toString();
-                    const dateString = date.format('YYYY-MM-DD');
-                    const response = await fetch(`${KECK_API_LOCAL_URL}schedule/getScheduleImage?date=${dateString}&telnr=${telnr}`);
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    let tsched = await response.json() as SchedImg;
-                    tsched = { ...tsched, TelNr: telnr };
-                    schedImg = [...schedImg, tsched];
+        const dateString = date.format('YYYY-MM-DD');
 
-                }
+        const getScheduleImage = async () => {
+            try {
+                const schedImg = await Promise.all(['1', '2'].map(telnr => get_schedule_image(dateString, telnr)));
                 setScheduleImg(schedImg);
             } catch (error) {
-                console.error('Failed to fetch schedule:', error);
+                console.error('Failed to fetch schedule image:', error);
             }
-
-            try {
-                const response2 = await fetch(`${KECK_API_URL}/too/getInstrumentsTooStatus?date=${date.format('YYYY-MM-DD')}`);
-                if (!response2.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                let instrStatus = await response2.json() as InstrumentStatusResponse;
-                instrStatus = Object.fromEntries(Object.entries(instrStatus).filter(([_, status]) => status.Instrument !== null
-                ));
-
-                setInstrumentsStatusResp(instrStatus);
-            } catch (error) {
-                console.error('Failed to fetch instruments:', error);
-            }
-
         }
 
         const getSchedule = async () => {
-            console.log('TooForm component mounted with date:', date);
-            let sched = [] as ScheduleItem[];
             try {
-                for (let idx = 1; idx <= 2; idx++) {
-                    const telnr = idx.toString();
-                    const dateString = date.format('YYYY-MM-DD');
-                    const response = await fetch(`${KECK_API_URL}schedule/getSchedule?date=${dateString}&telnr=${telnr}`);
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    let tsched = await response.json() as ScheduleItem[];
-                    tsched = tsched.map(item => ({
-                        ...item,
-                        TelNr: telnr
-                    }));
-
-                    sched = [...sched, ...tsched];
-                }
-                setSchedule(sched);
+                const sched = await Promise.all(['1', '2'].map(telnr => get_schedule(dateString, telnr)));
+                setSchedule(sched.flat());
             } catch (error) {
                 console.error('Failed to fetch schedule:', error);
             }
+        }
 
+        const getInstrumentsStatus = async () => {
             try {
-                const response2 = await fetch(`${KECK_API_URL}/too/getInstrumentsTooStatus?date=${date.format('YYYY-MM-DD')}`);
-                if (!response2.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                let instrStatus = await response2.json() as InstrumentStatusResponse;
-                instrStatus = Object.fromEntries(Object.entries(instrStatus).filter(([_, status]) => status.Instrument !== null
-                ));
-
-                setInstrumentsStatusResp(instrStatus);
+                setInstrumentsStatusResp(await get_instruments_too_status(dateString));
             } catch (error) {
                 console.error('Failed to fetch instruments:', error);
             }
-
         }
+
         console.log('Fetching schedule for date:', date.format('YYYY-MM-DD'));
         getSchedule();
         getScheduleImage();
+        getInstrumentsStatus();
 
     }, [date])
 

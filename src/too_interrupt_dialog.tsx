@@ -7,9 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Dialog from '@mui/material/Dialog';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import type { Too } from './too_form';
-import type { UserInfo } from './App';
-import { KECK_API_URL } from './config';
+import { get_too_can_interrupt, type Too, type TooInterruptResult, type UserInfo } from './api/api_root';
 
 
 export interface TooInterruptDialogProps {
@@ -77,31 +75,6 @@ function TooInterruptDialog(props: TooInterruptDialogProps) {
     );
 }
 
-interface Program {
-    Date: string;
-    EndTime: string;
-    InstitutionInterrupt: boolean;
-    InstitutionReason: string[]
-    Instrument: string;
-    IsSwitch: boolean;
-    PartnerInterrupt: boolean
-    PartnerReason: string[]
-    ProjCode: string;
-    StartTime: string;
-
-}
-
-interface TooInterruptResult {
-    checkTimeHST: string
-    InstrReadyWarn: boolean
-    InstrState: string
-    TelReayWarn: boolean
-    TelState: string
-    canInterrupt: boolean;
-    error: boolean | string;
-    programs: Program[];
-}
-
 interface Props {
     too: Too;
     userinfo: UserInfo;
@@ -116,23 +89,14 @@ export const TooInterruptDialogButton = (props: Props) => {
         console.log('Calling too_can_interrupt with:', too);
         const semid = too.semester + '_' + too.projcode;
         try {
-            const params = new URLSearchParams(
-                {
-                    semid,
-                    obsid: Number(userinfo.Id).toString(),
-                    instr: too.instrument,
-                    date: too.obsdate,
-                    duration: too.duration,
-                    starttime: too.starttime,
-                }
-            ).toString()
-            const response = await fetch(`${KECK_API_URL}too/getTooCanInterrupt?${params}`, {
-                method: 'GET',
+            const res = await get_too_can_interrupt({
+                semid,
+                obsid: Number(userinfo.Id).toString(),
+                instr: too.instrument,
+                date: too.obsdate,
+                duration: too.duration,
+                starttime: too.starttime,
             });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const res = await response.json();
             setInterruptResult(res)
             console.log('Response from can_interrupt:', res);
         } catch (error) {
