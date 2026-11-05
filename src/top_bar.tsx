@@ -62,11 +62,6 @@ export function TopBar(props: Props) {
             <DoorFrontIcon id="observer-portal-icon" />
           </IconButton>
         </Tooltip>
-        {/* <Tooltip title="Toggle on for dark mode">
-          <Switch
-            checked={props.darkMode}
-            onChange={props.handleThemeChange} />
-        </Tooltip> */}
       </Toolbar>
     </AppBar>
   )

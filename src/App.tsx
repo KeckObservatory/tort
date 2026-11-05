@@ -9,14 +9,10 @@ import { get_userinfo, type ScheduleItem, type UserInfo } from './api/api_root'
 
 
 const get_semester = (date: dayjs.Dayjs) => {
-  const year = date.year();
   const month = date.month() + 1; // month is 0-indexed in dayjs
-  if (month >= 2 && month <= 7) {
-    return `${year}A`;
-  } else if (month >= 7 && month <= 12) {
-    return `${year}B`;
-  }
-  return '';
+  if (month >= 2 && month <= 7) return `${date.year()}A`;
+  // Aug–Dec belong to this year's B; January belongs to last year's B.
+  return `${month === 1 ? date.year() - 1 : date.year()}B`;
 }
 
 export const StyledPaper = styled(Paper, {
