@@ -1,4 +1,4 @@
-SYSNAM   = tort 
+SYSNAM   = tort
 
 # Is this an official or sandbox build?
 ifeq ($(findstring sandbox, $(CURDIR)),sandbox)
