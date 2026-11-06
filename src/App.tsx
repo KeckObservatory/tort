@@ -4,47 +4,15 @@ import { handleTheme } from './theme'
 import { TopBar } from './top_bar'
 import { TooForm } from './too_form'
 import dayjs from 'dayjs'
-import { SchedulePanel, type ScheduleItem } from './schedule_panel'
-import { get_target_from_url, TargetForm } from './target_form'
-import { KECK_BASE } from './config'
+import { SchedulePanel } from './schedule_panel'
+import { get_userinfo, type ScheduleItem, type UserInfo } from './api/api_root'
 
-export interface UserInfo {
-  status: string;
-  Id: number;
-  Title: string;
-  FirstName: string;
-  MiddleName: string;
-  LastName: string;
-  Email: string;
-  Affiliation: string;
-  WorkArea: string;
-  Interests: string;
-  Street: string;
-  City: string;
-  State: string;
-  Country: string;
-  Zip: string;
-  Phone: string;
-  Fax: string;
-  URL: string;
-  ModDate: string;
-  Exposed: string;
-  username: string;
-  resetcode: number;
-  AllocInst: string;
-  BadEmail: string;
-  Category: string;
-}
 
 const get_semester = (date: dayjs.Dayjs) => {
-  const year = date.year();
   const month = date.month() + 1; // month is 0-indexed in dayjs
-  if (month >= 2 && month <= 7) {
-    return `${year}A`;
-  } else if (month >= 7 && month <= 12) {
-    return `${year}B`;
-  }
-  return '';
+  if (month >= 2 && month <= 7) return `${date.year()}A`;
+  // Aug–Dec belong to this year's B; January belongs to last year's B.
+  return `${month === 1 ? date.year() - 1 : date.year()}B`;
 }
 
 export const StyledPaper = styled(Paper, {
@@ -71,20 +39,12 @@ function App() {
 
   useEffect(() => {
     const handleUserinfo = async () => {
-      const resp = await fetch(`${KECK_BASE}/userinfo/`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      // Handle token verification failure
-      if (!resp.ok) {
-        console.error('userinfo fetch failed:', resp.statusText)
-        return
+      try {
+        setUserInfo(await get_userinfo())
+        console.log('Userinfo fetched successfully.')
+      } catch (error) {
+        console.error('userinfo fetch failed:', error)
       }
-      setUserInfo && setUserInfo(await resp.json())
-      console.log('Userinfo fetched successfully.')
     }
     handleUserinfo()
   }, [])
@@ -110,17 +70,11 @@ function App() {
                 <TooForm obsid={String(userinfo.Id)} schedule={schedule} semester={semester} date={date} setDate={setDate} userinfo={userinfo} />
                 <SchedulePanel date={date} setDate={setDate} setSchedule={setSchedule} />
               </Stack>
-              {
-                get_target_from_url().name && (
-                  <TargetForm userinfo={userinfo} />
-                )
-              }
             </Stack>
         ) : (
           <Skeleton variant="rectangular" width={"100%"} height={118} />
         )
         }
-        {/* <LoginPanel setUserInfo={setUserInfo} /> */}
       </ThemeProvider >
     </div >
   )

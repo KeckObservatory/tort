@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import DoorFrontIcon from '@mui/icons-material/DoorFront';
 import IconButton from '@mui/material/IconButton';
 import { KECK_OBS_PORTAL } from './config';
-import type { UserInfo } from './App';
+import type { UserInfo } from './api/api_root';
 
 interface Props {
   userinfo: UserInfo | null;
@@ -62,11 +62,6 @@ export function TopBar(props: Props) {
             <DoorFrontIcon id="observer-portal-icon" />
           </IconButton>
         </Tooltip>
-        {/* <Tooltip title="Toggle on for dark mode">
-          <Switch
-            checked={props.darkMode}
-            onChange={props.handleThemeChange} />
-        </Tooltip> */}
       </Toolbar>
     </AppBar>
   )

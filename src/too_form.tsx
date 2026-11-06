@@ -1,8 +1,9 @@
 import { Tooltip, TextField, Stack, Box, Typography, FormControl, InputLabel, Select, MenuItem, Button } from '@mui/material';
 import { StyledPaper } from './App';
 import { useEffect, useState } from 'react';
-import { BASE_TOO, KECK_API_URL } from './config';
-import { DayjsDatePicker, type ScheduleItem } from './schedule_panel';
+import { BASE_TOO } from './config';
+import { DayjsDatePicker } from './schedule_panel';
+import { delete_too_request, get_too_items, get_too_requests, submit_too_cancel, submit_too_request, type ActionType, type InterruptType, type ScheduleItem, type Too, type TooItem } from './api/api_root';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { TimeField } from '@mui/x-date-pickers/TimeField';
@@ -46,55 +47,10 @@ export interface Props {
     userinfo: any;
 }
 
-type ActionType = 'draft' | 'submit' | 'edit' | 'created';
-type InterruptType = 'partner' | 'institution';
 
 const INTERRUPT_TYPES: InterruptType[] = ['partner', 'institution'];
 const FLEXIBILITY_OPTIONS: string[] = ['+/- 0:00:00', '+/- 1:00:00', '+/- 2:00:00', '+/- 3:00:00', '+/- 4:00:00'];
 const OBSERVER_LOCATIONS: string[] = ['Remote', 'HQ'];
-
-export interface TooItem {
-    FirstName: string;
-    LastName: string;
-    HoursChargedInstitution: number;
-    HoursChargedPartner: number;
-    HoursRemainInstitution: number;
-    HoursRemainPartner: number;
-    InstrumentList: string;
-    InterruptList: string;
-    ObsId: string;
-    ProjCode: string;
-    Semester: string;
-    tooHoursInstitution: number;
-    tooHoursPartner: number;
-}
-
-export interface Too {
-    submitterid: string;
-    username: string;
-    action: ActionType;
-    tooid?: string;
-    delFlag: boolean
-    semester: string;
-    piid: string;
-    projcode: string;
-    instrument: string;
-    obsdate: string;
-    starttime: string;
-    duration: string;
-    target: string;
-    flextime: string;
-    obsdesignation?: string;
-    obslocation: string;
-    pinotes?: string;
-    interruptproj: string;
-    interrupttype: InterruptType;
-    skipsubmitwarnings?: number;
-    instrconfigs?: object[];
-    reqstatus?: string;
-    starlist?: string;
-}
-
 
 export const TooForm = (props: Props) => {
     const { semester, obsid, schedule, date, setDate, userinfo } = props;
@@ -130,13 +86,9 @@ export const TooForm = (props: Props) => {
         setSelectedTooItem(null);
     }
 
-    const get_too_requests = async () => {
+    const refresh_too_requests = async () => {
         try {
-            const response = await fetch(`${KECK_API_URL}/too/getTooRequests?semester=${semester}&obsid=${obsid}`);
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json()
+            const data = await get_too_requests(semester, obsid);
             if (Array.isArray(data)) {
                 console.log('Fetched ToO Requests:', data);
                 const newTooRequests = data.map((tooReq: Too) => {
@@ -155,44 +107,28 @@ export const TooForm = (props: Props) => {
         const fetchToos = async () => {
             console.log('TooForm component mounted with target:');
             try {
-                const response = await fetch(`${KECK_API_URL}/too/getToo?semester=${semester}&obsid=${obsid}`);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                const data = await response.json();
+                const data = await get_too_items(semester, obsid);
                 console.log('Fetched ToO Line Items:', data);
                 setTooItems(data);
                 setSelectedTooItem(data.length > 0 ? data[0] : null);
             } catch (error) {
                 console.error('Error fetching TOOs:', error);
             }
-            get_too_requests();
+            refresh_too_requests();
 
         };
         fetchToos();
     }, [semester, obsid]);
 
     useEffect(() => {
-        get_too_requests();
+        refresh_too_requests();
     }, [tooSavedTrigger]);
 
 
     const call_save_too = async (action: ActionType) => {
         console.log('Saving ToO request with the following details:');
         console.log('too:', too, 'action:', action);
-        const resp = await fetch(`${KECK_API_URL}too/submitTooRequest`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ ...too, action, skipsubmitwarnings: 1 }),
-
-        });
-        if (!resp.ok) {
-            throw new Error('Failed to save ToO request');
-        }
-
-        const respjson = await resp.json();
+        const respjson = await submit_too_request({ ...too, action, skipsubmitwarnings: 1 });
 
         if (respjson.status !== 'success') {
             throw new Error('Failed to save ToO request: ' + respjson.message);
@@ -208,12 +144,8 @@ export const TooForm = (props: Props) => {
 
     const call_too_delete = async (too: Too) => {
         console.log('Deleting ToO request with the following details:');
-        const resp = await fetch(`${KECK_API_URL}too/deleteTooRequest?tooid=${too.tooid}`, {
-            method: 'DELETE'
-        });
-        if (!resp.ok) {
-            throw new Error('Failed to delete ToO request');
-        }
+        if (!too.tooid) return;
+        await delete_too_request(too.tooid);
         console.log('ToO request deleted successfully.');
         //update the too requests list to exclude the deleted too
         setTooSavedTrigger(prev => prev + 1);
@@ -222,18 +154,7 @@ export const TooForm = (props: Props) => {
 
     const call_too_cancel = async (too: Too) => {
         console.log('Cancelling ToO request with the following details:');
-        const cancelRequest = { 'tooid': too.tooid ?? '', 'approvalnotes': 'cancelled via online interface' };
-        const resp = await fetch(`${KECK_API_URL}too/submitTooCancel`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(cancelRequest),
-        });
-        if (!resp.ok) {
-            throw new Error('Failed to save ToO request');
-        }
-        const respjson = await resp.json();
+        const respjson = await submit_too_cancel(too.tooid ?? '', 'cancelled via online interface');
         respjson.status !== 'success' && console.error('Failed to cancel ToO request: ' + respjson.message);
         if (respjson.status === 'success') {
             console.log('Received cancelled resp:', respjson);
