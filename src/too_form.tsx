@@ -3,7 +3,7 @@ import { StyledPaper } from './App';
 import { useEffect, useState } from 'react';
 import { BASE_TOO } from './config';
 import { DayjsDatePicker } from './schedule_panel';
-import { delete_too_request, get_too_items, get_too_requests, submit_too_cancel, submit_too_request, type ActionType, type InterruptType, type ScheduleItem, type Too, type TooItem } from './api/api_root';
+import { delete_too_request, get_too_items, get_too_requests, submit_too_cancel, submit_too_request, type ActionType, type InstrumentStatusResponse, type InterruptType, type ScheduleItem, type TooWindow, type Too, type TooItem } from './api/api_root';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { TimeField } from '@mui/x-date-pickers/TimeField';
@@ -38,10 +38,50 @@ const to_lower_case_keys = (obj: Too) => {
 }
 
 
+const DAY_MIN = 24 * 60;
+const DURATION_RE = /^\d{1,2}:[0-5]\d:[0-5]\d$/; // H:MM:SS
+const HST_NOON_UT_MIN = 22 * 60; // noon HST = 22:00 UT
+
+const to_minutes = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + (m || 0);
+}
+
+// Minutes since noon HST (22:00 UT), so a night that wraps past 00:00 UT is a monotonic range.
+const night_minutes = (utMinutes: number) => (utMinutes - HST_NOON_UT_MIN + 2 * DAY_MIN) % DAY_MIN;
+
+// The scheduled program the ToO would interrupt: the one on the instrument's telescope
+// whose schedule block contains the requested start time on the observing date (HST).
+// Schedule StartTime/EndTime and the ToO start time are both UT.
+const find_interrupted_program = (
+    schedule: ScheduleItem[],
+    instrumentsStatusResp: InstrumentStatusResponse,
+    instrument: string,
+    obsdate: string,
+    starttimeUT: string,
+): ScheduleItem | undefined => {
+    if (!instrument || !obsdate || !starttimeUT) return undefined;
+    const telNr = (instrumentsStatusResp[instrument] ?? Object.values(instrumentsStatusResp)
+        .find(s => s.Instrument?.toUpperCase() === instrument.toUpperCase()))?.TelNr;
+    const start = night_minutes(to_minutes(starttimeUT));
+    return schedule.find(item => {
+        if (dayjs(item.Date).format('YYYY-MM-DD') !== obsdate) return false;
+        const onTelescope = telNr !== undefined
+            ? String(item.TelNr) === String(telNr)
+            : item.Instrument?.toUpperCase().startsWith(instrument.toUpperCase());
+        if (!onTelescope || !item.StartTime || !item.EndTime) return false;
+        const blockStart = night_minutes(to_minutes(item.StartTime));
+        const blockEnd = night_minutes(to_minutes(item.EndTime)) || DAY_MIN;
+        return blockStart <= start && start < blockEnd;
+    });
+}
+
 export interface Props {
     semester: string;
     obsid: string;
     schedule: ScheduleItem[];
+    instrumentsStatusResp: InstrumentStatusResponse;
+    setTooWindow: (tooWindow: TooWindow | null) => void;
     date: any;
     setDate: (date: dayjs.Dayjs) => void;
     userinfo: any;
@@ -53,7 +93,7 @@ const FLEXIBILITY_OPTIONS: string[] = ['+/- 0:00:00', '+/- 1:00:00', '+/- 2:00:0
 const OBSERVER_LOCATIONS: string[] = ['Remote', 'HQ'];
 
 export const TooForm = (props: Props) => {
-    const { semester, obsid, schedule, date, setDate, userinfo } = props;
+    const { semester, obsid, schedule, instrumentsStatusResp, setTooWindow, date, setDate, userinfo } = props;
     const [tooItems, setTooItems] = useState<TooItem[]>([]);
     const [tooRequests, setTooRequests] = useState<Too[]>([]);
     const [selectedTooItem, setSelectedTooItem] = useState<TooItem | null>(null);
@@ -70,7 +110,7 @@ export const TooForm = (props: Props) => {
                 piid: obsid,
                 skipsubmitwarnings: 1,
                 obsdate: date.format('YYYY-MM-DD'),
-                starttime: dayjs().format('HH:mm:ss'),
+                starttime: new Date().toISOString().slice(11, 19), // current time in UT (HH:mm:ss)
                 submitterid: obsid,
                 instrconfigs: [],
                 username: userinfo?.username || '',
@@ -78,6 +118,29 @@ export const TooForm = (props: Props) => {
             });
         }); // Initialize too with default values
     }, [selectedTooItem, date, userinfo]);
+
+    // Interrupted program is read-only: derived from the schedule, instrument, observing date and start time.
+    // Only recompute once the loaded schedule is for this ToO's observing date.
+    const scheduleLoadedForObsdate = schedule.some(item => dayjs(item.Date).format('YYYY-MM-DD') === too.obsdate);
+    useEffect(() => {
+        if (!scheduleLoadedForObsdate) return;
+        const interruptproj = find_interrupted_program(schedule, instrumentsStatusResp, too.instrument, too.obsdate, too.starttime)?.ProjCode ?? '';
+        setToo(prevToo => prevToo.interruptproj === interruptproj ? prevToo : { ...prevToo, interruptproj });
+    }, [schedule, instrumentsStatusResp, scheduleLoadedForObsdate, too.instrument, too.obsdate, too.starttime]);
+
+    // Report the projected ToO time block so the schedule panel can overlay it on the instrument's telescope.
+    useEffect(() => {
+        if (!too.instrument || !too.obsdate || !too.starttime || !DURATION_RE.test(too.duration ?? '')) {
+            setTooWindow(null);
+            return;
+        }
+        setTooWindow({
+            telNr: instrumentsStatusResp[too.instrument]?.TelNr,
+            obsdate: too.obsdate,
+            starttime: too.starttime,
+            duration: too.duration,
+        });
+    }, [setTooWindow, instrumentsStatusResp, too.instrument, too.obsdate, too.starttime, too.duration]);
 
 
 
@@ -165,7 +228,12 @@ export const TooForm = (props: Props) => {
     }
 
     const projCodes = tooItems.map(tooItem => tooItem.ProjCode);
-    const incompleteToo = !too.instrument || !too.obsdate || !too.starttime || !too.duration || !too.interruptproj || !too.interrupttype;
+    // Instruments selectable for a ToO: those marked ToO Ready in the Instrument ToO Readiness table.
+    const readyInstruments = Object.entries(instrumentsStatusResp)
+        .filter(([, status]) => status.TooReady)
+        .map(([inst]) => inst);
+    const validDuration = DURATION_RE.test(too.duration ?? '') && too.duration !== '0:00:00';
+    const incompleteToo = !too.instrument || !too.obsdate || !too.starttime || !validDuration || !too.interruptproj || !too.interrupttype;
     const submitMsg = ['scheduled', 'cancelled'].includes(too.reqstatus ?? '') ? 'Edit ToO' : too.reqstatus==='draft' ? 'Edit ToO Draft' : 'Create ToO'
     const saveType: ActionType = too.reqstatus === 'submitted' ? 'edit' : 'draft'
 
@@ -313,33 +381,25 @@ export const TooForm = (props: Props) => {
                                         }));
                                     }}
                                 >
-                                    {selectedTooItem?.InstrumentList.split(' ').map(inst => (
+                                    {readyInstruments.map(inst => (
                                         <MenuItem key={inst} value={inst}>{inst}</MenuItem>
                                     ))}
+                                    {/* keep a loaded ToO's instrument displayable even if it is not ToO ready on this date */}
+                                    {too.instrument && !readyInstruments.includes(too.instrument) && (
+                                        <MenuItem key={too.instrument} value={too.instrument} disabled>{`${too.instrument} (not ToO ready)`}</MenuItem>
+                                    )}
                                 </Select>
                             </FormControl>
                         </Tooltip>
-                        <Tooltip title={'Select Interrupted Program'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
-                                <InputLabel id="interrupted-program">Interrupted Program</InputLabel>
-                                <Select
-                                    labelId="select-interrupted-program"
-                                    id="select-interrupted-program"
-                                    required
-                                    value={too?.interruptproj ?? ''}
-                                    label="Interrupted Program"
-                                    onChange={(evt) => {
-                                        setToo(prevToo => ({
-                                            ...prevToo,
-                                            interruptproj: evt.target.value,
-                                        }));
-                                    }}
-                                >
-                                    {schedule.map(ol => (
-                                        <MenuItem key={ol.ProjCode} value={ol.ProjCode}>{ol.ProjCode}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
+                        <Tooltip title={'Scheduled program on the instrument\'s telescope at the observing date and start time'} placement='right'>
+                            <TextField
+                                id="interrupted-program"
+                                sx={{ width: 250, alignSelf: "center" }}
+                                label="Interrupted Program"
+                                value={too.interruptproj ?? ''}
+                                placeholder={too.instrument ? 'No scheduled program' : 'Select instrument'}
+                                slotProps={{ inputLabel: { shrink: true }, input: { readOnly: true } }}
+                            />
                         </Tooltip>
 
                     </Stack>
@@ -413,7 +473,18 @@ export const TooForm = (props: Props) => {
                                 />
                             </FormControl>
                         </Tooltip>
-                        <TextField sx={{ width: 250, alignSelf: "center" }} label="Duration" value={too.duration} />
+                        <Tooltip title={'ToO duration as H:MM:SS'} placement='right'>
+                            <TextField
+                                sx={{ width: 250, alignSelf: "center" }}
+                                label="Duration (H:MM:SS)"
+                                value={too.duration ?? ''}
+                                placeholder="1:00:00"
+                                slotProps={{ inputLabel: { shrink: true } }}
+                                error={!!too.duration && !validDuration}
+                                helperText={too.duration && !validDuration ? 'Use H:MM:SS, e.g. 1:30:00' : ' '}
+                                onChange={(evt) => setToo(prevToo => ({ ...prevToo, duration: evt.target.value }))}
+                            />
+                        </Tooltip>
                         <StartTimePicker
                             date={date}
                             time={too.starttime}
