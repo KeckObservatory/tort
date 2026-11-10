@@ -79,6 +79,13 @@ const find_interrupted_program = (
     });
 }
 
+// Whether a program's InstrumentList (e.g. "KCWI LRIS") covers a readiness-table instrument key (e.g. "LRIS-ADC").
+const program_allows_instrument = (tooItem: TooItem | null, instrumentsStatusResp: InstrumentStatusResponse, instrument: string) => {
+    const names = new Set((tooItem?.InstrumentList ?? '').split(/[\s,]+/).filter(Boolean).map(name => name.toUpperCase()));
+    const base = instrumentsStatusResp[instrument]?.Instrument;
+    return names.has(instrument.toUpperCase()) || (!!base && names.has(base.toUpperCase()));
+}
+
 export interface Props {
     semester: string;
     obsid: string;
@@ -134,10 +141,13 @@ export const TooForm = (props: Props) => {
         setToo(prevToo => prevToo.obsdate === obsdate ? prevToo : { ...prevToo, obsdate });
     }, [date]);
 
-    // Selecting a program sets the ToO's program code; nothing else is reset.
+    // Selecting a program sets the ToO's program code, and clears the instrument if the new program doesn't allow it.
     const select_program = (tooItem: TooItem | null) => {
         setSelectedTooItem(tooItem);
-        setToo(prevToo => ({ ...prevToo, projcode: tooItem?.ProjCode || '' }));
+        setToo(prevToo => {
+            const allowed = !prevToo.instrument || program_allows_instrument(tooItem, instrumentsStatusResp, prevToo.instrument);
+            return { ...prevToo, projcode: tooItem?.ProjCode || '', instrument: allowed ? prevToo.instrument : '' };
+        });
     }
 
     // Load a saved ToO request: populate its program and move the date picker to its observing date.
@@ -269,11 +279,14 @@ export const TooForm = (props: Props) => {
         institution: Number(selectedTooItem?.HoursRemainInstitution ?? 0),
         partner: Number(selectedTooItem?.HoursRemainPartner ?? 0),
     };
-    // Instruments selectable for a ToO: those marked ToO Ready in the Instrument ToO Readiness table.
-    const readyInstruments = Object.entries(instrumentsStatusResp)
-        .filter(([, status]) => status.TooReady)
-        .map(([inst]) => inst);
-    // A ToO can only be submitted with an instrument marked ToO Ready for the observing date.
+    // Instruments the selected program may use. The program lists names like "KCWI" or "LRIS"; the readiness
+    // table keys can be more specific ("LRIS-ADC"), so match on either the key or its base instrument name.
+    const programInstruments = Object.entries(instrumentsStatusResp)
+        .filter(([key]) => program_allows_instrument(selectedTooItem, instrumentsStatusResp, key))
+        .map(([key, status]) => ({ inst: key, ready: !!status.TooReady }));
+    // Selectable: allowed by the program AND marked ToO Ready in the Instrument ToO Readiness table.
+    const readyInstruments = programInstruments.filter(pi => pi.ready).map(pi => pi.inst);
+    // A ToO can only be submitted with a program instrument marked ToO Ready for the observing date.
     const instrumentNotReady = !!too.instrument && !readyInstruments.includes(too.instrument);
     const validDuration = DURATION_RE.test(too.duration ?? '') && too.duration !== '0:00:00';
     const incompleteToo = !too.projcode || !too.instrument || !too.obsdate || !too.starttime || !validDuration || !too.interruptproj || !too.interrupttype;
@@ -427,12 +440,14 @@ export const TooForm = (props: Props) => {
                                         }));
                                     }}
                                 >
-                                    {readyInstruments.map(inst => (
-                                        <MenuItem key={inst} value={inst}>{inst}</MenuItem>
+                                    {programInstruments.map(({ inst, ready }) => (
+                                        <MenuItem key={inst} value={inst} disabled={!ready}>
+                                            {ready ? inst : `${inst} (not ToO ready)`}
+                                        </MenuItem>
                                     ))}
-                                    {/* keep a loaded ToO's instrument displayable even if it is not ToO ready on this date */}
-                                    {too.instrument && !readyInstruments.includes(too.instrument) && (
-                                        <MenuItem key={too.instrument} value={too.instrument} disabled>{`${too.instrument} (not ToO ready)`}</MenuItem>
+                                    {/* keep a loaded ToO's instrument displayable even if the program no longer allows it */}
+                                    {too.instrument && !programInstruments.some(pi => pi.inst === too.instrument) && (
+                                        <MenuItem key={too.instrument} value={too.instrument} disabled>{`${too.instrument} (not allowed for program)`}</MenuItem>
                                     )}
                                 </Select>
                             </FormControl>
@@ -548,7 +563,7 @@ export const TooForm = (props: Props) => {
                                 {submitMsg}
                             </Button>
                         </Tooltip>
-                        <Tooltip title={instrumentNotReady ? `${too.instrument} is not ToO ready on ${too.obsdate}; cannot submit` : 'Submit ToO request'}>
+                        <Tooltip title={instrumentNotReady ? `${too.instrument} is not allowed for ${too.projcode || 'this program'} or not ToO ready on ${too.obsdate}; cannot submit` : 'Submit ToO request'}>
                             {/* span lets the tooltip show while the button is disabled */}
                             <span>
                                 <Button
