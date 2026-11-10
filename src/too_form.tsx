@@ -296,7 +296,7 @@ export const TooForm = (props: Props) => {
     return (
         <Stack sx={{
             display: 'flex',
-            flexWrap: 'wrap',
+            // no flexWrap here: in a wrapping column the panel sizes to its content, so the rows below would never wrap
         }}
             justifyContent='center'
             maxWidth='100%'
@@ -308,13 +308,13 @@ export const TooForm = (props: Props) => {
                         ToO Form
                     </Typography>
                     <Stack sx={{ marginBottom: '24px' }} width="100%" direction="column" justifyContent='center' spacing={2}>
-                        <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
+                        <Stack sx={{ marginBottom: '24px', flexWrap: 'wrap' }} useFlexGap width="100%" direction="row" justifyContent='center' spacing={2}>
                             <DayjsDatePicker
                                 date={date}
                                 setDate={setDate}
                             />
                         </Stack>
-                        <Stack width="100%" direction="row" justifyContent='center' spacing={2}>
+                        <Stack sx={{ flexWrap: 'wrap' }} useFlexGap width="100%" direction="row" justifyContent='center' spacing={2}>
                             <Tooltip title={'Select existing ToO Request to edit/view'} placement='right'>
                                 <FormControl fullWidth sx={{ width: 150, alignSelf: "center" }}>
                                     <InputLabel id="select-too-request">Select ToO</InputLabel>
@@ -372,7 +372,7 @@ export const TooForm = (props: Props) => {
                             </Button>
                         </Stack>
                     </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
+                    <Stack sx={{ marginBottom: '24px', flexWrap: 'wrap' }} useFlexGap width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Typography variant="h6" sx={{ alignSelf: 'center' }}>
                             {`Remaining Institution Hours: ${selectedTooItem?.HoursRemainInstitution || '0'}`}
                         </Typography>
@@ -385,7 +385,7 @@ export const TooForm = (props: Props) => {
                             </Typography>
                         }
                     </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
+                    <Stack sx={{ marginBottom: '24px', flexWrap: 'wrap' }} useFlexGap width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'Enter Target Name'} placement='right'>
                             <TextField
                                 sx={{ width: 250, alignSelf: "center" }}
@@ -510,7 +510,7 @@ export const TooForm = (props: Props) => {
                             </FormControl>
                         </Tooltip>
                     </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
+                    <Stack sx={{ marginBottom: '24px', flexWrap: 'wrap' }} useFlexGap width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'ToO duration as H:MM:SS'} placement='right'>
                             <TextField
                                 sx={{ width: 250, alignSelf: "center" }}
@@ -553,7 +553,7 @@ export const TooForm = (props: Props) => {
                             </FormControl>
                         </Tooltip>
                     </Stack>
-                    <Stack direction="row" justifyContent="center" spacing={2} sx={{ paddingBottom: '16px' }}>
+                    <Stack direction="row" justifyContent="center" spacing={2} useFlexGap sx={{ paddingBottom: '16px', flexWrap: 'wrap' }}>
                         <Tooltip title={'Save ToO request draft'}>
                             <Button
                                 variant="contained"
