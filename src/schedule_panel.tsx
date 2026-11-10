@@ -127,12 +127,11 @@ export const ScheduleTable = ({ instrumentStatusResp, scheduleImg, date, tooWind
                 </Box>
             </Grid>
             <Grid size={3} justifyContent='center' sx={{ minWidth: 0, overflowX: 'auto' }}>
-                <Typography variant="h6" align="center">Instrument ToO Readiness</Typography>
-                <TableContainer sx={{ maxWidth: 1000, justifyContent: 'center' }} component={Paper}>
-                    <Table sx={{ maxWidth: 1000, justifyContent: 'center' }} size='small' aria-label="simple table">
+                <Typography variant="h6" align="center">ToO Readiness</Typography>
+                <TableContainer sx={{ maxWidth: 500, justifyContent: 'center' }} component={Paper}>
+                    <Table sx={{ maxWidth: 500, justifyContent: 'center' }} size='small' aria-label="simple table">
                         <TableHead>
                             <TableRow>
-                                <TableCell align="left">Too Ready?</TableCell>
                                 <TableCell align="left">Instrument?</TableCell>
                                 <TableCell align="right">Telescope</TableCell>
                             </TableRow>
@@ -154,14 +153,16 @@ export const ScheduleTable = ({ instrumentStatusResp, scheduleImg, date, tooWind
                                     }
                                     return 0; // keep original order if both are the same
                                 })
+                                .filter(
+                                    (([_, row]) => {
+                                        return row.TooReady
+                                    })
+                                )
                                 .map(([key, row]) => (
                                     <TableRow
                                         key={key}
                                         sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
                                     >
-                                        <TableCell component="th" scope="row">
-                                            {row.TooReady ? 'Yes' : 'No'}
-                                        </TableCell>
                                         <TableCell component="th" scope="row">
                                             {key}
                                         </TableCell>
@@ -190,7 +191,6 @@ export const DayjsDatePicker = ({ date, setDate }: { date: Dayjs, setDate: (date
 
 export interface Props {
     date: Dayjs;
-    setDate: (date: Dayjs) => void;
     setSchedule: (schedule: ScheduleItem[]) => void;
     instrumentsStatusResp: InstrumentStatusResponse;
     setInstrumentsStatusResp: (status: InstrumentStatusResponse) => void;
@@ -198,7 +198,7 @@ export interface Props {
 }
 
 export const SchedulePanel = (props: Props) => {
-    const { date, setDate, setSchedule, instrumentsStatusResp, setInstrumentsStatusResp, tooWindow } = props;
+    const { date, setSchedule, instrumentsStatusResp, setInstrumentsStatusResp, tooWindow } = props;
     const [scheduleImg, setScheduleImg] = useState<SchedImg[]>([]);
 
     useEffect(() => {
@@ -240,9 +240,9 @@ export const SchedulePanel = (props: Props) => {
 
     return (
         <Stack sx={{
-            paddingTop: '16px',
             display: 'flex',
-            flexWrap: 'wrap',
+            // no flexWrap: in a wrapping column the panel sizes to its content's width,
+            // which lets the full-width schedule images push it wider than the page
         }}
             justifyContent='center'
             maxWidth='100%'
@@ -252,12 +252,6 @@ export const SchedulePanel = (props: Props) => {
                     Schedule
                 </Typography>
                 <Box>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
-                        <DayjsDatePicker
-                            date={date}
-                            setDate={setDate}
-                        />
-                    </Stack>
                     <ScheduleTable date={date} scheduleImg={scheduleImg} instrumentStatusResp={instrumentsStatusResp} tooWindow={tooWindow} />
                 </Box>
             </StyledPaper>

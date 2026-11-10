@@ -60,23 +60,25 @@ function App() {
   return (
     <div className="App" style={{
       "margin": "0 auto",
-      "padding": "2rem",
       "textAlign": "center",
     }}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {/* Top bar sits flush with the page edges; only the content below it is padded. */}
         <TopBar userinfo={userinfo} />
+        <div style={{ "padding": "2rem" }}>
         {userinfo ? (
             <Stack width='100%' direction="column" spacing={2} justifyContent="center">
               <Stack width='100%' direction="column" spacing={2} justifyContent="center">
                 <TooForm obsid={String(userinfo.Id)} schedule={schedule} instrumentsStatusResp={instrumentsStatusResp} setTooWindow={setTooWindow} semester={semester} date={date} setDate={setDate} userinfo={userinfo} />
-                <SchedulePanel date={date} setDate={setDate} setSchedule={setSchedule} instrumentsStatusResp={instrumentsStatusResp} setInstrumentsStatusResp={setInstrumentsStatusResp} tooWindow={tooWindow} />
+                <SchedulePanel date={date} setSchedule={setSchedule} instrumentsStatusResp={instrumentsStatusResp} setInstrumentsStatusResp={setInstrumentsStatusResp} tooWindow={tooWindow} />
               </Stack>
             </Stack>
         ) : (
           <Skeleton variant="rectangular" width={"100%"} height={118} />
         )
         }
+        </div>
       </ThemeProvider >
     </div >
   )

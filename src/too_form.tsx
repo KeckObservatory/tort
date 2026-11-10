@@ -1,4 +1,4 @@
-import { Tooltip, TextField, Stack, Box, Typography, FormControl, InputLabel, Select, MenuItem, Button } from '@mui/material';
+import { Tooltip, TextField, Stack, Box, Typography, FormControl, FormHelperText, InputLabel, Select, MenuItem, Button } from '@mui/material';
 import { StyledPaper } from './App';
 import { useEffect, useState } from 'react';
 import { BASE_TOO } from './config';
@@ -14,15 +14,18 @@ interface StartTimePickerProps {
     time: string;
     date: dayjs.Dayjs;
     setTime: (time: string) => void;
+    disabled?: boolean;
 }
 
-export default function StartTimePicker({ date, time, setTime }: StartTimePickerProps) {
+export default function StartTimePicker({ date, time, setTime, disabled }: StartTimePickerProps) {
     const [hour, minute] = time ? time.split(':').map(Number) : [0, 0];
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <TimeField label="Observing Start Time (UT)"
+                disabled={disabled}
                 value={date.set('hour', hour).set('minute', minute)}
                 format="HH:mm"
+                helperText=' ' // reserve helper-text space so the row stays level
                 onChange={(newValue) => newValue && setTime(newValue.format('HH:mm:ss'))} />
         </LocalizationProvider>
     );
@@ -98,26 +101,56 @@ export const TooForm = (props: Props) => {
     const [tooRequests, setTooRequests] = useState<Too[]>([]);
     const [selectedTooItem, setSelectedTooItem] = useState<TooItem | null>(null);
 
-    const [too, setToo] = useState<Too>(BASE_TOO as Too)
+    // Fields identifying who is submitting; kept in sync with the logged-in user and semester.
+    const identity_fields = () => ({
+        semester: semester,
+        piid: obsid,
+        submitterid: obsid,
+        username: userinfo?.username || '',
+        skipsubmitwarnings: 1,
+    });
+
+    // A blank ToO; used on load and when the form is cleared.
+    const new_too = (): Too => ({
+        ...(BASE_TOO as Too),
+        ...identity_fields(),
+        projcode: '',
+        obsdate: date.format('YYYY-MM-DD'),
+        starttime: new Date().toISOString().slice(11, 19), // current time in UT (HH:mm:ss)
+        instrconfigs: [],
+        action: 'draft',
+    });
+
+    const [too, setToo] = useState<Too>(new_too)
     const [tooSavedTrigger, setTooSavedTrigger] = useState(0);
 
     useEffect(() => {
-        setToo((prevToo) => {
-            return ({
-                ...prevToo,
-                semester: semester,
-                projcode: selectedTooItem?.ProjCode || '',
-                piid: obsid,
-                skipsubmitwarnings: 1,
-                obsdate: date.format('YYYY-MM-DD'),
-                starttime: new Date().toISOString().slice(11, 19), // current time in UT (HH:mm:ss)
-                submitterid: obsid,
-                instrconfigs: [],
-                username: userinfo?.username || '',
-                action: 'draft'
-            });
-        }); // Initialize too with default values
-    }, [selectedTooItem, date, userinfo]);
+        setToo(prevToo => ({ ...prevToo, ...identity_fields() }));
+    }, [semester, obsid, userinfo]);
+
+    // The observing date picker drives the ToO's observing date.
+    useEffect(() => {
+        const obsdate = date.format('YYYY-MM-DD');
+        setToo(prevToo => prevToo.obsdate === obsdate ? prevToo : { ...prevToo, obsdate });
+    }, [date]);
+
+    // Selecting a program sets the ToO's program code; nothing else is reset.
+    const select_program = (tooItem: TooItem | null) => {
+        setSelectedTooItem(tooItem);
+        setToo(prevToo => ({ ...prevToo, projcode: tooItem?.ProjCode || '' }));
+    }
+
+    // Load a saved ToO request: populate its program and move the date picker to its observing date.
+    const load_too_request = (tooReq: Too) => {
+        const loaded = to_lower_case_keys(tooReq) as Too;
+        const obsdate = dayjs(loaded.obsdate);
+        if (obsdate.isValid()) {
+            loaded.obsdate = obsdate.format('YYYY-MM-DD');
+            if (!obsdate.isSame(date, 'day')) setDate(obsdate);
+        }
+        setToo(loaded);
+        setSelectedTooItem(tooItems.find(tooItem => tooItem.ProjCode === loaded.projcode) ?? null);
+    }
 
     // Interrupted program is read-only: derived from the schedule, instrument, observing date and start time.
     // Only recompute once the loaded schedule is for this ToO's observing date.
@@ -145,7 +178,8 @@ export const TooForm = (props: Props) => {
 
 
     const clear_form = () => {
-        setToo(BASE_TOO as Too);
+        // Keep the observing date, start time, etc. so derived fields (interrupted program) can be recomputed.
+        setToo(new_too());
         setSelectedTooItem(null);
     }
 
@@ -173,7 +207,7 @@ export const TooForm = (props: Props) => {
                 const data = await get_too_items(semester, obsid);
                 console.log('Fetched ToO Line Items:', data);
                 setTooItems(data);
-                setSelectedTooItem(data.length > 0 ? data[0] : null);
+                select_program(data.length > 0 ? data[0] : null);
             } catch (error) {
                 console.error('Error fetching TOOs:', error);
             }
@@ -197,7 +231,7 @@ export const TooForm = (props: Props) => {
             throw new Error('Failed to save ToO request: ' + respjson.message);
         }
         if (respjson.tooid) {
-            setToo(prevToo => ({ ...prevToo, tooid: respjson.tooid, reqstatus: respjson.reqstatus}));
+            setToo(prevToo => ({ ...prevToo, tooid: respjson.tooid, reqstatus: respjson.reqstatus }));
         }
 
         //update the too requests list
@@ -228,18 +262,26 @@ export const TooForm = (props: Props) => {
     }
 
     const projCodes = tooItems.map(tooItem => tooItem.ProjCode);
+    // A program must be chosen before any other ToO information can be entered.
+    const noProgram = !selectedTooItem;
+    // An interrupt type is selectable only if the program has hours of that type remaining.
+    const interruptHoursRemaining: Record<InterruptType, number> = {
+        institution: Number(selectedTooItem?.HoursRemainInstitution ?? 0),
+        partner: Number(selectedTooItem?.HoursRemainPartner ?? 0),
+    };
     // Instruments selectable for a ToO: those marked ToO Ready in the Instrument ToO Readiness table.
     const readyInstruments = Object.entries(instrumentsStatusResp)
         .filter(([, status]) => status.TooReady)
         .map(([inst]) => inst);
+    // A ToO can only be submitted with an instrument marked ToO Ready for the observing date.
+    const instrumentNotReady = !!too.instrument && !readyInstruments.includes(too.instrument);
     const validDuration = DURATION_RE.test(too.duration ?? '') && too.duration !== '0:00:00';
-    const incompleteToo = !too.instrument || !too.obsdate || !too.starttime || !validDuration || !too.interruptproj || !too.interrupttype;
-    const submitMsg = ['scheduled', 'cancelled'].includes(too.reqstatus ?? '') ? 'Edit ToO' : too.reqstatus==='draft' ? 'Edit ToO Draft' : 'Create ToO'
+    const incompleteToo = !too.projcode || !too.instrument || !too.obsdate || !too.starttime || !validDuration || !too.interruptproj || !too.interrupttype;
+    const submitMsg = ['scheduled', 'cancelled'].includes(too.reqstatus ?? '') ? 'Edit ToO' : too.reqstatus === 'draft' ? 'Edit ToO Draft' : 'Create ToO'
     const saveType: ActionType = too.reqstatus === 'submitted' ? 'edit' : 'draft'
 
     return (
         <Stack sx={{
-            paddingTop: '16px',
             display: 'flex',
             flexWrap: 'wrap',
         }}
@@ -275,12 +317,35 @@ export const TooForm = (props: Props) => {
 
                                             if (tooReq) {
                                                 console.log('Selected ToO Request:', tooReq);
-                                                setToo(to_lower_case_keys(tooReq) as Too);
+                                                load_too_request(tooReq);
                                             }
                                         }}
                                     >
                                         {tooRequests && tooRequests.map(too => (
                                             <MenuItem key={too.tooid} value={too.target + '-' + too.tooid}>{too.target + '-' + too.tooid}</MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Tooltip>
+                            <Tooltip title={'select ToO program id'} placement='right'>
+                                <FormControl fullWidth sx={{ width: 150, alignSelf: "center" }}>
+                                    <InputLabel
+                                        id="select-program-id">Program ID</InputLabel>
+                                    <Select
+                                        labelId="select-program-id"
+                                        id="select-program-id"
+                                        required
+                                        value={selectedTooItem?.ProjCode || ''}
+                                        label="Program Id"
+                                        onChange={(event) => {
+                                            const tooItem = tooItems.find(tooItem => tooItem.ProjCode === event.target.value);
+                                            if (tooItem) {
+                                                select_program(tooItem)
+                                            }
+                                        }}
+                                    >
+                                        {projCodes.map(code => (
+                                            <MenuItem key={code} value={code}>{code}</MenuItem>
                                         ))}
                                     </Select>
                                 </FormControl>
@@ -293,29 +358,6 @@ export const TooForm = (props: Props) => {
                                 Clear Form
                             </Button>
                         </Stack>
-                        <Tooltip title={'select ToO program id'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 150, alignSelf: "center" }}>
-                                <InputLabel
-                                    id="select-program-id">Program ID</InputLabel>
-                                <Select
-                                    labelId="select-program-id"
-                                    id="select-program-id"
-                                    required
-                                    value={selectedTooItem?.ProjCode || ''}
-                                    label="Program Id"
-                                    onChange={(event) => {
-                                        const tooItem = tooItems.find(tooItem => tooItem.ProjCode === event.target.value);
-                                        if (tooItem) {
-                                            setSelectedTooItem(tooItem)
-                                        }
-                                    }}
-                                >
-                                    {projCodes.map(code => (
-                                        <MenuItem key={code} value={code}>{code}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Tooltip>
                     </Stack>
                     <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Typography variant="h6" sx={{ alignSelf: 'center' }}>
@@ -324,24 +366,25 @@ export const TooForm = (props: Props) => {
                         <Typography variant="h6" sx={{ alignSelf: 'center' }}>
                             {`Remaining Partner Hours: ${selectedTooItem?.HoursRemainPartner || '0'}`}
                         </Typography>
-                        <Typography variant="h6" sx={{ alignSelf: 'center' }}>
-                            {`Can Interrupt Institutions: ${selectedTooItem?.InterruptList || ''}`}
-                        </Typography>
+                        {selectedTooItem?.InterruptList &&
+                            <Typography variant="h6" sx={{ alignSelf: 'center' }}>
+                                {`Can Interrupt Institutions: ${selectedTooItem?.InterruptList || ''}`}
+                            </Typography>
+                        }
                     </Stack>
                     <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'Enter Target Name'} placement='right'>
                             <TextField
                                 sx={{ width: 250, alignSelf: "center" }}
                                 label="Target Name"
+                                disabled={noProgram}
                                 slotProps={{ inputLabel: { shrink: too.target ? true : false } }}
                                 value={too.target ?? ''}
                                 onChange={(evt) => setToo(prevToo => ({ ...prevToo, target: evt.target.value }))}
                             />
                         </Tooltip>
-                    </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'select Interrupt type'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
+                            <FormControl fullWidth disabled={noProgram} sx={{ width: 250, alignSelf: "center" }}>
                                 <InputLabel id="interrupt-type">Interrupt type</InputLabel>
                                 <Select
                                     labelId="select-interrupt-type"
@@ -360,19 +403,22 @@ export const TooForm = (props: Props) => {
                                     }}
                                 >
                                     {INTERRUPT_TYPES.map(it => (
-                                        <MenuItem key={it} value={it}>{it}</MenuItem>
+                                        <MenuItem key={it} value={it} disabled={!(interruptHoursRemaining[it] > 0)}>
+                                            {it}
+                                        </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
                         </Tooltip>
                         <Tooltip title={'select Instrument'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
+                            <FormControl fullWidth disabled={noProgram} sx={{ width: 250, alignSelf: "center" }}>
                                 <InputLabel id="select-instrument">Instrument</InputLabel>
                                 <Select
                                     labelId="select-instrument"
                                     id="select-instrument"
                                     value={too.instrument ?? ''}
                                     required
+                                    error={instrumentNotReady}
                                     label="Instrument"
                                     onChange={(evt) => {
                                         setToo(prevToo => ({
@@ -401,32 +447,8 @@ export const TooForm = (props: Props) => {
                                 slotProps={{ inputLabel: { shrink: true }, input: { readOnly: true } }}
                             />
                         </Tooltip>
-
-                    </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
-                        <Tooltip title={'Select Flexibility'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
-                                <InputLabel id="flex-time">Flexibility</InputLabel>
-                                <Select
-                                    labelId="select-flex-time"
-                                    id="select-flex-time"
-                                    value={too.flextime ?? ''}
-                                    label="Flexibility"
-                                    onChange={(evt) => {
-                                        setToo(prevToo => ({
-                                            ...prevToo,
-                                            flextime: evt.target.value,
-                                        }));
-                                    }}
-                                >
-                                    {FLEXIBILITY_OPTIONS.map(fo => (
-                                        <MenuItem key={fo} value={fo}>{fo}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Tooltip>
                         <Tooltip title={'Select Observer Location'} placement='right'>
-                            <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
+                            <FormControl fullWidth disabled={noProgram} sx={{ width: 250, alignSelf: "center" }}>
                                 <InputLabel id="observer-location">Observer Location</InputLabel>
                                 <Select
                                     labelId="select-observer-location"
@@ -452,18 +474,17 @@ export const TooForm = (props: Props) => {
                             label="Request Status"
                             value={too.reqstatus ?? ''}
                         />
-                    </Stack>
-                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'Include any notes'} placement='right'>
                             <FormControl fullWidth sx={{ width: 250, alignSelf: "center" }}>
                                 <TextField
                                     id="notes"
                                     label="Notes"
+                                    disabled={noProgram}
                                     slotProps={{ inputLabel: { shrink: too.pinotes ? true : false } }}
                                     placeholder="Enter any notes here"
                                     multiline
                                     variant="outlined"
-                                    value={too.pinotes}
+                                    value={too.pinotes ?? ''}
                                     onChange={(evt) => {
                                         setToo(prevToo => ({
                                             ...prevToo,
@@ -473,10 +494,13 @@ export const TooForm = (props: Props) => {
                                 />
                             </FormControl>
                         </Tooltip>
+                    </Stack>
+                    <Stack sx={{ marginBottom: '24px' }} width="100%" direction="row" justifyContent='center' spacing={2}>
                         <Tooltip title={'ToO duration as H:MM:SS'} placement='right'>
                             <TextField
                                 sx={{ width: 250, alignSelf: "center" }}
                                 label="Duration (H:MM:SS)"
+                                disabled={noProgram}
                                 value={too.duration ?? ''}
                                 placeholder="1:00:00"
                                 slotProps={{ inputLabel: { shrink: true } }}
@@ -486,10 +510,33 @@ export const TooForm = (props: Props) => {
                             />
                         </Tooltip>
                         <StartTimePicker
+                            disabled={noProgram}
                             date={date}
                             time={too.starttime}
                             setTime={(time) => setToo(prevToo => ({ ...prevToo, starttime: time }))}
                         />
+                        <Tooltip title={'Select Flexibility'} placement='right'>
+                            <FormControl fullWidth disabled={noProgram} sx={{ width: 250, alignSelf: "center" }}>
+                                <InputLabel id="flex-time">Flexibility</InputLabel>
+                                <Select
+                                    labelId="select-flex-time"
+                                    id="select-flex-time"
+                                    value={too.flextime ?? ''}
+                                    label="Flexibility"
+                                    onChange={(evt) => {
+                                        setToo(prevToo => ({
+                                            ...prevToo,
+                                            flextime: evt.target.value,
+                                        }));
+                                    }}
+                                >
+                                    {FLEXIBILITY_OPTIONS.map(fo => (
+                                        <MenuItem key={fo} value={fo}>{fo}</MenuItem>
+                                    ))}
+                                </Select>
+                                <FormHelperText>{' '}</FormHelperText>{/* reserve helper-text space so the row stays level */}
+                            </FormControl>
+                        </Tooltip>
                     </Stack>
                     <Stack direction="row" justifyContent="center" spacing={2} sx={{ paddingBottom: '16px' }}>
                         <Tooltip title={'Save ToO request draft'}>
@@ -501,14 +548,17 @@ export const TooForm = (props: Props) => {
                                 {submitMsg}
                             </Button>
                         </Tooltip>
-                        <Tooltip title={'Submit ToO request'}>
-                            <Button
-                                variant="contained"
-                                onClick={() => call_save_too('submit')}
-                                disabled={!too.tooid}
-                            >
-                                Submit ToO
-                            </Button>
+                        <Tooltip title={instrumentNotReady ? `${too.instrument} is not ToO ready on ${too.obsdate}; cannot submit` : 'Submit ToO request'}>
+                            {/* span lets the tooltip show while the button is disabled */}
+                            <span>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => call_save_too('submit')}
+                                    disabled={!too.tooid || instrumentNotReady}
+                                >
+                                    Submit ToO
+                                </Button>
+                            </span>
                         </Tooltip>
                         <Tooltip title={'Cancel ToO request'}>
                             <Button
