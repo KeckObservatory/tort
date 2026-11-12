@@ -114,6 +114,14 @@ export interface Too {
     starlist?: string;
 }
 
+// The projected ToO time block, drawn over the schedule image.
+export interface TooWindow {
+    telNr?: number | string;
+    obsdate: string;   // YYYY-MM-DD (HST)
+    starttime: string; // HH:mm[:ss] UT
+    duration: string;  // H:mm[:ss]
+}
+
 export interface SubmitTooResponse {
     status: string; // 'success' on success
     message?: string;

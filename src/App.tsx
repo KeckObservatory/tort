@@ -5,7 +5,7 @@ import { TopBar } from './top_bar'
 import { TooForm } from './too_form'
 import dayjs from 'dayjs'
 import { SchedulePanel } from './schedule_panel'
-import { get_userinfo, type ScheduleItem, type UserInfo } from './api/api_root'
+import { get_userinfo, type InstrumentStatusResponse, type ScheduleItem, type TooWindow, type UserInfo } from './api/api_root'
 
 
 const get_semester = (date: dayjs.Dayjs) => {
@@ -26,6 +26,8 @@ export const StyledPaper = styled(Paper, {
 
 function App() {
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [instrumentsStatusResp, setInstrumentsStatusResp] = useState<InstrumentStatusResponse>({});
+  const [tooWindow, setTooWindow] = useState<TooWindow | null>(null);
 
   const [userinfo, setUserInfo] = useState<UserInfo | null>(null)
   const now = dayjs()
@@ -58,23 +60,25 @@ function App() {
   return (
     <div className="App" style={{
       "margin": "0 auto",
-      "padding": "2rem",
       "textAlign": "center",
     }}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {/* Top bar sits flush with the page edges; only the content below it is padded. */}
         <TopBar userinfo={userinfo} />
+        <div style={{ "padding": "2rem" }}>
         {userinfo ? (
             <Stack width='100%' direction="column" spacing={2} justifyContent="center">
-              <Stack width='100%' direction="row" spacing={2} justifyContent="center">
-                <TooForm obsid={String(userinfo.Id)} schedule={schedule} semester={semester} date={date} setDate={setDate} userinfo={userinfo} />
-                <SchedulePanel date={date} setDate={setDate} setSchedule={setSchedule} />
+              <Stack width='100%' direction="column" spacing={2} justifyContent="center">
+                <TooForm obsid={String(userinfo.Id)} schedule={schedule} instrumentsStatusResp={instrumentsStatusResp} setTooWindow={setTooWindow} semester={semester} date={date} setDate={setDate} userinfo={userinfo} />
+                <SchedulePanel date={date} setSchedule={setSchedule} instrumentsStatusResp={instrumentsStatusResp} setInstrumentsStatusResp={setInstrumentsStatusResp} tooWindow={tooWindow} />
               </Stack>
             </Stack>
         ) : (
           <Skeleton variant="rectangular" width={"100%"} height={118} />
         )
         }
+        </div>
       </ThemeProvider >
     </div >
   )
