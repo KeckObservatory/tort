@@ -23,48 +23,50 @@ function TooInterruptDialog(props: TooInterruptDialogProps) {
         onClose();
     };
 
-    const can_cannot = interruptResult?.canInterrupt ? 'can' : 'cannot';
 
     return (
         <Dialog onClose={handleClose} open={open}>
             <DialogTitle>Can ToO Interrupt?</DialogTitle>
             {interruptResult ? (
                 <div>
-                    <Typography variant="h6" component="div" sx={{ padding: '16px' }}>
-                        This ToO {can_cannot} interrupt the following programs:
-                    </Typography>
                     <List>
                         {interruptResult.programs.map((program, index) => (
-                            <ListItem key={index}>
-                                <ListItemText
-                                    primary={`Program: ${program.ProjCode} | Instrument: ${program.Instrument} | Date: ${program.Date} | Start Time: ${program.StartTime} | End Time: ${program.EndTime}`}
-                                    secondary={
-                                        <>
-                                            <p>
-                                                {program.InstitutionInterrupt && (
-                                                    <Typography component="span" variant="body2" color="error">
-                                                        Institution Interrupt:<br />{program.InstitutionReason.join(' ')}
-                                                    </Typography>
-                                                )}
-                                            </p>
-                                            <p>
-                                                {program.PartnerInterrupt && (
-                                                    <Typography component="span" variant="body2" color="error">
-                                                        Partner Interrupt:<br />{program.PartnerReason.join(' ')}
-                                                    </Typography>
-                                                )}
-                                            </p>
-                                            <p>
-                                                {program.IsSwitch && (
-                                                    <Typography component="span" variant="body2" color="primary">
-                                                        (This is a switch)
-                                                    </Typography>
-                                                )}
-                                            </p>
-                                        </>
-                                    }
-                                />
-                            </ListItem>
+
+                            <>
+                                <Typography variant="h6" component="div" sx={{ padding: '8px' }}>
+                                    This ToO {program.InstitutionInterrupt === "no" && program.PartnerInterrupt === "no" ? "cannot" : "can"} interrupt the following program:
+                                </Typography>
+                                <ListItem key={index}>
+                                    <ListItemText
+                                        primary={`Program: ${program.ProjCode} | Instrument: ${program.Instrument} | Date: ${program.Date} | Start Time: ${program.StartTime} | End Time: ${program.EndTime}`}
+                                        secondary={
+                                            <>
+                                                <p>
+                                                    {program.InstitutionInterrupt && (
+                                                        <Typography component="span" variant="body2" color="error">
+                                                            Institution Interrupt:<br />{program.InstitutionReason.join(' ')}
+                                                        </Typography>
+                                                    )}
+                                                </p>
+                                                <p>
+                                                    {program.PartnerInterrupt && (
+                                                        <Typography component="span" variant="body2" color="error">
+                                                            Partner Interrupt:<br />{program.PartnerReason.join(' ')}
+                                                        </Typography>
+                                                    )}
+                                                </p>
+                                                <p>
+                                                    {program.IsSwitch && (
+                                                        <Typography component="span" variant="body2" color="primary">
+                                                            (This is a switch)
+                                                        </Typography>
+                                                    )}
+                                                </p>
+                                            </>
+                                        }
+                                    />
+                                </ListItem>
+                            </>
                         ))}
                     </List>
                 </div>
