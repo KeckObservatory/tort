@@ -137,11 +137,11 @@ export interface TooCancelResponse {
 export interface InterruptProgram {
     Date: string;
     EndTime: string;
-    InstitutionInterrupt: boolean;
+    InstitutionInterrupt: string;
     InstitutionReason: string[]
     Instrument: string;
     IsSwitch: boolean;
-    PartnerInterrupt: boolean
+    PartnerInterrupt: string
     PartnerReason: string[]
     ProjCode: string;
     StartTime: string;

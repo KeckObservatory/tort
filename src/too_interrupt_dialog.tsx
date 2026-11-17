@@ -23,49 +23,53 @@ function TooInterruptDialog(props: TooInterruptDialogProps) {
         onClose();
     };
 
+
     return (
         <Dialog onClose={handleClose} open={open}>
             <DialogTitle>Can ToO Interrupt?</DialogTitle>
             {interruptResult ? (
-                interruptResult.canInterrupt ? (
-                    <div>
-                        <Typography variant="h6" component="div" sx={{ padding: '16px' }}>
-                            This ToO can interrupt the following programs:
-                        </Typography>
-                        <List>
-                            {interruptResult.programs.map((program, index) => (
+                <div>
+                    <List>
+                        {interruptResult.programs.map((program, index) => (
+
+                            <>
+                                <Typography variant="h6" component="div" sx={{ padding: '8px' }}>
+                                    This ToO {program.InstitutionInterrupt === "no" && program.PartnerInterrupt === "no" ? "cannot" : "can"} interrupt the following program:
+                                </Typography>
                                 <ListItem key={index}>
                                     <ListItemText
                                         primary={`Program: ${program.ProjCode} | Instrument: ${program.Instrument} | Date: ${program.Date} | Start Time: ${program.StartTime} | End Time: ${program.EndTime}`}
                                         secondary={
                                             <>
-                                                {program.InstitutionInterrupt && (
-                                                    <Typography component="span" variant="body2" color="error">
-                                                        Institution Interrupt: {program.InstitutionReason.join(', ')}
-                                                    </Typography>
-                                                )}
-                                                {program.PartnerInterrupt && (
-                                                    <Typography component="span" variant="body2" color="error">
-                                                        Partner Interrupt: {program.PartnerReason.join(', ')}
-                                                    </Typography>
-                                                )}
-                                                {program.IsSwitch && (
-                                                    <Typography component="span" variant="body2" color="primary">
-                                                        (This is a switch)
-                                                    </Typography>
-                                                )}
+                                                <p>
+                                                    {program.InstitutionInterrupt && (
+                                                        <Typography component="span" variant="body2" color="error">
+                                                            Institution Interrupt:<br />{program.InstitutionReason.join(' ')}
+                                                        </Typography>
+                                                    )}
+                                                </p>
+                                                <p>
+                                                    {program.PartnerInterrupt && (
+                                                        <Typography component="span" variant="body2" color="error">
+                                                            Partner Interrupt:<br />{program.PartnerReason.join(' ')}
+                                                        </Typography>
+                                                    )}
+                                                </p>
+                                                <p>
+                                                    {program.IsSwitch && (
+                                                        <Typography component="span" variant="body2" color="primary">
+                                                            (This is a switch)
+                                                        </Typography>
+                                                    )}
+                                                </p>
                                             </>
                                         }
                                     />
                                 </ListItem>
-                            ))}
-                        </List>
-                    </div>
-                ) : (
-                    <Typography variant="h6" component="div" sx={{ padding: '16px' }}>
-                        This ToO cannot interrupt any scheduled programs.
-                    </Typography>
-                )
+                            </>
+                        ))}
+                    </List>
+                </div>
             ) : (
                 <Typography variant="h6" component="div" sx={{ padding: '16px' }}>
                     Loading...
